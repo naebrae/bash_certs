@@ -1,0 +1,73 @@
+#!/bin/bash
+
+if [ "x$1" == "x" ]
+then
+  echo -e "Usage $0 certificate.request\n"
+  exit
+fi
+
+BASE=`dirname $0`
+source $BASE/config
+
+if [ "${CADB}x" == "x" ]
+then
+  echo "The Certifcate Authority DataBase folder is not defined. Exiting.."
+  exit 1
+fi
+
+if [ ! -f ${CADB}/${LOCALCA}.crt ]
+then
+  echo "${CADB}/${LOCALCA}.crt doesn't exists. Please create it before running this script."
+  exit 1
+fi
+
+REQFILE=$1
+# openssl 1.0.x -> subject=/C=AU/ST=Western Australia/L=Perth/O=Local/OU=Lab/CN=www.lab.local
+# openssl 1.1.x -> subject=C = AU, ST = Western Australia, L = Perth, O = Local, OU = Lab, CN = www.lab.local
+# Remove the extension so we can add our own
+FILE="${REQFILE%.*}"
+
+if [ ! -f "$REQFILE" ]
+then
+  echo "${REQFILE} doesn't exists. Please create it before running this script."
+  exit 1
+fi
+
+COUNTRY=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*C=//p' | sed 's/\/.*//' | sed 's/,.*//'` 
+STATE=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*ST=//p' | sed 's/\/.*//' | sed 's/,.*//'`
+LOCATION=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*L=//p' | sed 's/\/.*//' | sed 's/,.*//'`
+ORG=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*O=//p' | sed 's/\/.*//' | sed 's/,.*//'`
+ORGUNIT=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*OU=//p' | sed 's/\/.*//' | sed 's/,.*//'`
+CN=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*CN=//p' | sed 's/\/.*//' | sed 's/,.*//'`
+
+NEWSUBJ="/OU=Domain Control Validated/OU=locallab/CN=${CN}"
+
+openssl ca -batch -days $DAYS \
+  -in "${FILE}.csr" \
+  -out "${FILE}.crt" \
+  -subj "${NEWSUBJ}" \
+  -keyfile ${CADB}/${LOCALCA}.key \
+  -cert ${CADB}/${LOCALCA}.crt \
+  -name local_CA \
+  -config <(cat \
+  <(printf "[ local_CA ]\n") \
+  <(printf "copy_extensions=copy\n") \
+  <(printf "database=${CADB}/${LOCALCA}.idx\n") \
+  <(printf "unique_subject=no\n") \
+  <(printf "default_md=sha256\n") \
+  <(printf "serial=${CADB}/${LOCALCA}.srl\n") \
+  <(printf "new_certs_dir=${CADB}/\n") \
+  <(printf "policy=policy_DV\n") \
+  <(printf "[ policy_DV ]\n") \
+  <(printf "organizationName=optional\n") \
+  <(printf "organizationalUnitName=optional\n") \
+  <(printf "commonName=supplied\n") \
+  ) \
+  -extensions exts \
+  -extfile <(cat \
+  <(printf "[ exts ]\n") \
+  <(printf "certificatePolicies=2.23.140.1.2.1\n") \
+  )
+
+openssl verify -CAfile <(cat ${CADB}/${LOCALCA}.crt ${CADB}/${ROOTCA}.crt) $FILE.crt
+

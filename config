@@ -1,0 +1,17 @@
+#!/bin/bash
+
+BASE=`dirname $0`
+CADB="${BASE}/db"
+
+ROOTCA_SUBJ="/C=AU/O=Local Lab/OU=www.lab.local/CN=Local Lab Root"
+ROOTCA=`echo "$ROOTCA_SUBJ" | sed 's/ = /=/g' | sed -n 's/^.*CN=//p' | sed 's/\/.*//' | sed 's/,.*//' | sed "s/\./_/g" | sed "s/\s\+/_/g"`
+ROOTCA_CRT_URI="http://ca.lab.local/${ROOTCA}.crt"
+ROOTCA_CRL_URI="http://ca.lab.local/${ROOTCA}.crl"
+
+LOCALCA_SUBJ="/C=AU/O=Local Lab/OU=www.lab.local/CN=Local Lab CA"
+LOCALCA=`echo "$LOCALCA_SUBJ" | sed 's/ = /=/g' | sed -n 's/^.*CN=//p' | sed 's/\/.*//' | sed 's/,.*//' | sed "s/\./_/g" | sed "s/\s\+/_/g"`
+LOCALCA_CRT_URI="http://ca.lab.local/${LOCALCA}.crt"
+LOCALCA_CRL_URI="http://ca.lab.local/${LOCALCA}.crl"
+LOCALCA_OCSP="http://ocsp.lab.local"
+
+DAYS=365

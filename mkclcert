@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# ./mkclcert "/OU=Clients/UID=12345+CN=sysadmin+title=System Admin+GN=System+SN=Admin+uidNumber=1000/emailAddress=sysadmin@lab.local"
+
+if [ "x$1" == "x" ]
+then
+  echo "Usage $0 /OU=Clients/CN=clientname/emailAddress=client@domain"
+  exit
+fi
+
+BASE=`dirname $0`
+[[ -f $BASE/config ]] && source $BASE/config || echo "Configuration file $BASE/config was not found"
+
+if [ "${CADB}x" == "x" ]
+then
+  echo "The Certifcate Authority DataBase folder is not defined. Exiting.."
+  exit 1
+fi
+
+if [ ! -f ${CADB}/${LOCALCA}.crt ]
+then
+  echo "${CADB}/${LOCALCA}.crt doesn't exists. Please create it before running this script."
+  exit 1
+fi
+
+URL=$1
+FILE=`echo $URL | sed -n 's/^.*CN=//p' | sed 's/\/.*//' | sed 's/\+.*//' | sed 's/,.*//'`
+SUBJ="$URL"
+
+openssl req -newkey ed25519 -nodes \
+  -keyout "$FILE.key" \
+  -out "$FILE.csr" \
+  -multivalue-rdn \
+  -subj "$SUBJ" \
+  -config <(cat \
+  <(printf "oid_section=new_oids\n") \
+  <(printf "[ new_oids ]\n") \
+  <(printf "uidNumber = 1.3.6.1.1.1.1.0\n") \
+  <(printf "[ req ]\n") \
+  <(printf "distinguished_name=req\n") \
+  )
+
+openssl ca -batch -days $DAYS \
+  -in "${FILE}.csr" \
+  -out "${FILE}.crt" \
+  -multivalue-rdn \
+  -subj "${SUBJ}" \
+  -keyfile ${CADB}/${LOCALCA}.key \
+  -cert ${CADB}/${LOCALCA}.crt \
+  -preserveDN \
+  -name local_CA \
+  -config <(cat \
+  <(printf "oid_section=new_oids\n") \
+  <(printf "[ new_oids ]\n") \
+  <(printf "uidNumber = 1.3.6.1.1.1.1.0\n") \
+  <(printf "[ local_CA ]\n") \
+  <(printf "database=${CADB}/${LOCALCA}.idx\n") \
+  <(printf "unique_subject=no\n") \
+  <(printf "default_md=sha256\n") \
+  <(printf "serial=${CADB}/${LOCALCA}.srl\n") \
+  <(printf "new_certs_dir=${CADB}/\n") \
+  <(printf "policy=policy_client\n") \
+  <(printf "[ policy_client ]\n") \
+  <(printf "commonName=supplied\n") \
+  ) \
+  -extensions exts \
+  -extfile <(cat \
+  <(printf "[ exts ]\n") \
+  <(printf "authorityKeyIdentifier=keyid:always,issuer\n") \
+  <(printf "subjectKeyIdentifier=hash\n") \
+  <(printf "subjectAltName=email:move\n") \
+  <(printf "keyUsage=critical,digitalSignature\n") \
+  <(printf "extendedKeyUsage=clientAuth,emailProtection\n") \
+  <(printf "basicConstraints=critical,CA:false\n") \
+  <(printf "authorityInfoAccess=caIssuers;URI:${LOCALCA_CRT_URI}\n") \
+  <(printf "crlDistributionPoints=URI:${LOCALCA_CRL_URI}\n") \
+  <(printf "certificatePolicies=2.23.140.1.2.3\n") \
+  )
+
+openssl verify -CAfile <(cat ${CADB}/${LOCALCA}.crt ${CADB}/${ROOTCA}.crt) $FILE.crt

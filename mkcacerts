@@ -1,0 +1,101 @@
+#!/bin/bash
+
+BASE=`dirname $0`
+[[ -f $BASE/config ]] && source $BASE/config || echo "Configuration file $BASE/config was not found"
+
+if [ "${CADB}x" == "x" ]
+then
+  echo "The Certifcate Authority DataBase folder is not defined. Exiting.."
+  exit 1
+fi
+  
+if [ ! -d ${CADB}/ ]
+then
+  mkdir -p ${CADB}/
+fi
+
+if [ ! -f ${CADB}/${ROOTCA}.idx ]
+then
+  touch ${CADB}/${ROOTCA}.idx
+  echo "unique_subject = yes" > ${CADB}/${ROOTCA}.idx.attr
+fi
+
+if [ ! -f ${CADB}/${ROOTCA}.srl ]
+then
+  openssl rand -hex -out ${CADB}/${ROOTCA}.srl 8
+fi
+
+openssl genrsa -out ${CADB}/${ROOTCA}.key 2048
+
+openssl req -new -x509 -nodes -sha256 -days 7304 \
+-key ${CADB}/${ROOTCA}.key \
+-out ${CADB}/${ROOTCA}.crt \
+-subj "${ROOTCA_SUBJ}" \
+-extensions exts \
+-config <(cat \
+<(printf "[ req ]\n") \
+<(printf "distinguished_name=req_distinguished_name\n") \
+<(printf "[ req_distinguished_name ]\n") \
+<(printf "[ exts ]\n") \
+<(printf "keyUsage=critical,digitalSignature,keyCertSign,cRLSign\n") \
+<(printf "basicConstraints=critical,CA:true\n") \
+<(printf "subjectKeyIdentifier=hash\n") \
+<(printf "authorityKeyIdentifier=keyid\n") \
+)
+
+openssl verify -CAfile ${CADB}/${ROOTCA}.crt ${CADB}/${ROOTCA}.crt
+
+
+if [ ! -f ${CADB}/${LOCALCA}.idx ]
+then
+  touch ${CADB}/${LOCALCA}.idx
+  echo "unique_subject = no" > ${CADB}/${LOCALCA}.idx.attr
+fi
+
+if [ ! -f ${CADB}/${LOCALCA}.srl ]
+then
+  openssl rand -hex -out ${CADB}/${LOCALCA}.srl 8
+fi
+
+openssl req -newkey rsa:2048 -nodes \
+-keyout ${CADB}/${LOCALCA}.key \
+-out ${CADB}/${LOCALCA}.csr \
+-subj "${LOCALCA_SUBJ}"
+
+openssl ca -batch -days 7304 \
+-in ${CADB}/${LOCALCA}.csr \
+-out ${CADB}/${LOCALCA}.crt \
+-keyfile ${CADB}/${ROOTCA}.key \
+-cert ${CADB}/${ROOTCA}.crt \
+-name root_CA \
+-config <(cat \
+<(printf "[ root_CA ]\n") \
+<(printf "database=${CADB}/${ROOTCA}.idx\n") \
+<(printf "unique_subject=no\n") \
+<(printf "default_md=sha256\n") \
+<(printf "serial=${CADB}/${ROOTCA}.srl\n") \
+<(printf "new_certs_dir=${CADB}/\n") \
+<(printf "policy=policy_anything\n") \
+<(printf "[ policy_anything ]\n") \
+<(printf "countryName=optional\n") \
+<(printf "stateOrProvinceName=optional\n") \
+<(printf "localityName=optional\n") \
+<(printf "organizationName=optional\n") \
+<(printf "organizationalUnitName=optional\n") \
+<(printf "commonName=supplied\n") \
+<(printf "emailAddress=optional\n") \
+) \
+-extensions exts \
+-extfile <(cat \
+<(printf "[ exts ]\n") \
+<(printf "basicConstraints=critical,CA:true,pathlen:0\n") \
+<(printf "keyUsage=critical,digitalSignature,keyCertSign,cRLSign\n") \
+<(printf "extendedKeyUsage=serverAuth,clientAuth\n") \
+<(printf "subjectKeyIdentifier=hash\n") \
+<(printf "authorityKeyIdentifier=keyid:always,issuer\n") \
+<(printf "authorityInfoAccess=caIssuers;URI:${ROOTCA_CRT_URI}\n") \
+<(printf "crlDistributionPoints=URI:http:${ROOTCA_CRL_URI}\n") \
+)
+
+openssl verify -CAfile ${CADB}/${ROOTCA}.crt ${CADB}/${LOCALCA}.crt
+
