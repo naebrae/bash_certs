@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ./mkclcert "/OU=Clients/UID=12345+CN=sysadmin+title=System Admin+GN=System+SN=Admin+uidNumber=1000/emailAddress=sysadmin@lab.local"
+# ./mkclcert "/OU=Clients/UID=12345+CN=sysadmin+title=System Admin+GN=System+SN=Admin+uidNumber=1000/emailAddress=sysadmin@lab.home"
 
 if [ "x$1" == "x" ]
 then
@@ -17,9 +17,9 @@ then
   exit 1
 fi
 
-if [ ! -f ${CADB}/${LOCALCA}.crt ]
+if [ ! -f ${CADB}/${HOMECA}.crt ]
 then
-  echo "${CADB}/${LOCALCA}.crt doesn't exists. Please create it before running this script."
+  echo "${CADB}/${HOMECA}.crt doesn't exists. Please create it before running this script."
   exit 1
 fi
 
@@ -45,19 +45,19 @@ openssl ca -batch -days $DAYS \
   -out "${FILE}.crt" \
   -multivalue-rdn \
   -subj "${SUBJ}" \
-  -keyfile ${CADB}/${LOCALCA}.key \
-  -cert ${CADB}/${LOCALCA}.crt \
+  -keyfile ${CADB}/${HOMECA}.key \
+  -cert ${CADB}/${HOMECA}.crt \
   -preserveDN \
-  -name local_CA \
+  -name home_CA \
   -config <(cat \
   <(printf "oid_section=new_oids\n") \
   <(printf "[ new_oids ]\n") \
   <(printf "uidNumber = 1.3.6.1.1.1.1.0\n") \
-  <(printf "[ local_CA ]\n") \
-  <(printf "database=${CADB}/${LOCALCA}.idx\n") \
+  <(printf "[ home_CA ]\n") \
+  <(printf "database=${CADB}/${HOMECA}.idx\n") \
   <(printf "unique_subject=no\n") \
   <(printf "default_md=sha256\n") \
-  <(printf "serial=${CADB}/${LOCALCA}.srl\n") \
+  <(printf "serial=${CADB}/${HOMECA}.srl\n") \
   <(printf "new_certs_dir=${CADB}/\n") \
   <(printf "policy=policy_client\n") \
   <(printf "[ policy_client ]\n") \
@@ -72,9 +72,9 @@ openssl ca -batch -days $DAYS \
   <(printf "keyUsage=critical,digitalSignature\n") \
   <(printf "extendedKeyUsage=clientAuth,emailProtection\n") \
   <(printf "basicConstraints=critical,CA:false\n") \
-  <(printf "authorityInfoAccess=caIssuers;URI:${LOCALCA_CRT_URI}\n") \
-  <(printf "crlDistributionPoints=URI:${LOCALCA_CRL_URI}\n") \
+  <(printf "authorityInfoAccess=caIssuers;URI:${HOMECA_CRT_URI}\n") \
+  <(printf "crlDistributionPoints=URI:${HOMECA_CRL_URI}\n") \
   <(printf "certificatePolicies=2.23.140.1.2.3\n") \
   )
 
-openssl verify -CAfile <(cat ${CADB}/${LOCALCA}.crt ${CADB}/${ROOTCA}.crt) $FILE.crt
+openssl verify -CAfile <(cat ${CADB}/${HOMECA}.crt ${CADB}/${ROOTCA}.crt) $FILE.crt

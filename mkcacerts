@@ -46,25 +46,25 @@ openssl req -new -x509 -nodes -sha256 -days 7304 \
 openssl verify -CAfile ${CADB}/${ROOTCA}.crt ${CADB}/${ROOTCA}.crt
 
 
-if [ ! -f ${CADB}/${LOCALCA}.idx ]
+if [ ! -f ${CADB}/${HOMECA}.idx ]
 then
-  touch ${CADB}/${LOCALCA}.idx
-  echo "unique_subject = no" > ${CADB}/${LOCALCA}.idx.attr
+  touch ${CADB}/${HOMECA}.idx
+  echo "unique_subject = no" > ${CADB}/${HOMECA}.idx.attr
 fi
 
-if [ ! -f ${CADB}/${LOCALCA}.srl ]
+if [ ! -f ${CADB}/${HOMECA}.srl ]
 then
-  openssl rand -hex -out ${CADB}/${LOCALCA}.srl 8
+  openssl rand -hex -out ${CADB}/${HOMECA}.srl 8
 fi
 
 openssl req -newkey rsa:2048 -nodes \
--keyout ${CADB}/${LOCALCA}.key \
--out ${CADB}/${LOCALCA}.csr \
--subj "${LOCALCA_SUBJ}"
+-keyout ${CADB}/${HOMECA}.key \
+-out ${CADB}/${HOMECA}.csr \
+-subj "${HOMECA_SUBJ}"
 
 openssl ca -batch -days 7304 \
--in ${CADB}/${LOCALCA}.csr \
--out ${CADB}/${LOCALCA}.crt \
+-in ${CADB}/${HOMECA}.csr \
+-out ${CADB}/${HOMECA}.crt \
 -keyfile ${CADB}/${ROOTCA}.key \
 -cert ${CADB}/${ROOTCA}.crt \
 -name root_CA \
@@ -97,5 +97,5 @@ openssl ca -batch -days 7304 \
 <(printf "crlDistributionPoints=URI:http:${ROOTCA_CRL_URI}\n") \
 )
 
-openssl verify -CAfile ${CADB}/${ROOTCA}.crt ${CADB}/${LOCALCA}.crt
+openssl verify -CAfile ${CADB}/${ROOTCA}.crt ${CADB}/${HOMECA}.crt
 

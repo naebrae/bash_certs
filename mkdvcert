@@ -15,9 +15,9 @@ then
   exit 1
 fi
 
-if [ ! -f ${CADB}/${LOCALCA}.crt ]
+if [ ! -f ${CADB}/${HOMECA}.crt ]
 then
-  echo "${CADB}/${LOCALCA}.crt doesn't exists. Please create it before running this script."
+  echo "${CADB}/${HOMECA}.crt doesn't exists. Please create it before running this script."
   exit 1
 fi
 
@@ -25,7 +25,7 @@ URL=$1
 FILE=`echo $URL | sed "s/\./_/g" | sed "s/\*/star/g" | sed 's/\/.*//'`
 # Remove /emailAddress if it exists from URL
 CN=`echo $URL | sed "s/\/.*//"`
-SUBJ="/C=AU/ST=Western Australia/L=Perth/O=Local Lab/CN=$URL"
+SUBJ="/C=AU/ST=Western Australia/L=Perth/O=Home Lab/CN=$URL"
 
 # If CN is a wildcard, add base domain as SAN.
 if [[ $CN = "*."* ]]
@@ -59,8 +59,8 @@ openssl req -newkey rsa:2048 -nodes \
   -subj "$SUBJ"
 
 REQFILE="$FILE.csr"
-# openssl 1.0.x -> subject=/C=AU/ST=Western Australia/L=Perth/O=Local/OU=Lab/CN=www.lab.local
-# openssl 1.1.x -> subject=C = AU, ST = Western Australia, L = Perth, O = Local, OU = Lab, CN = www.lab.local
+# openssl 1.0.x -> subject=/C=AU/ST=Western Australia/L=Perth/O=Home/OU=Lab/CN=www.lab.home
+# openssl 1.1.x -> subject=C = AU, ST = Western Australia, L = Perth, O = Home, OU = Lab, CN = www.lab.home
 
 COUNTRY=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*C=//p' | sed 's/\/.*//' | sed 's/,.*//'` 
 STATE=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*ST=//p' | sed 's/\/.*//' | sed 's/,.*//'`
@@ -69,21 +69,21 @@ ORG=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^su
 ORGUNIT=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*OU=//p' | sed 's/\/.*//' | sed 's/,.*//'`
 CN=`openssl req -noout -subject -in "$REQFILE" | sed 's/ = /=/g' | sed -n '/^subject/s/^.*CN=//p' | sed 's/\/.*//' | sed 's/,.*//'`
 
-NEWSUBJ="/OU=Domain Control Validated/OU=locallab/CN=${CN}"
+NEWSUBJ="/OU=Domain Control Validated/OU=homelab/CN=${CN}"
 
 openssl ca -batch -days $DAYS \
   -in "${FILE}.csr" \
   -out "${FILE}.crt" \
   -subj "${NEWSUBJ}" \
-  -keyfile ${CADB}/${LOCALCA}.key \
-  -cert ${CADB}/${LOCALCA}.crt \
-  -name local_CA \
+  -keyfile ${CADB}/${HOMECA}.key \
+  -cert ${CADB}/${HOMECA}.crt \
+  -name home_CA \
   -config <(cat \
-  <(printf "[ local_CA ]\n") \
-  <(printf "database               = ${CADB}/${LOCALCA}.idx\n") \
+  <(printf "[ home_CA ]\n") \
+  <(printf "database               = ${CADB}/${HOMECA}.idx\n") \
   <(printf "unique_subject         = no\n") \
   <(printf "default_md             = sha256\n") \
-  <(printf "serial                 = ${CADB}/${LOCALCA}.srl\n") \
+  <(printf "serial                 = ${CADB}/${HOMECA}.srl\n") \
   <(printf "new_certs_dir          = ${CADB}/\n") \
   <(printf "policy                 = policy_DV\n") \
   <(printf "[ policy_DV ]\n") \
@@ -99,9 +99,9 @@ openssl ca -batch -days $DAYS \
   <(printf "keyUsage               = critical,digitalSignature,keyEncipherment\n") \
   <(printf "extendedKeyUsage       = serverAuth,clientAuth\n") \
   <(printf "basicConstraints       = critical,CA:false\n") \
-  <(printf "authorityInfoAccess    = OCSP;URI:${LOCALCA_OCSP},caIssuers;URI:${LOCALCA_CRL_URI}\n") \
-  <(printf "crlDistributionPoints  = URI:${LOCALCA_CRL_URI}\n") \
+  <(printf "authorityInfoAccess    = OCSP;URI:${HOMECA_OCSP},caIssuers;URI:${HOMECA_CRL_URI}\n") \
+  <(printf "crlDistributionPoints  = URI:${HOMECA_CRL_URI}\n") \
   <(printf "certificatePolicies    = 2.23.140.1.2.1\n") \
   )
 
-openssl verify -CAfile <(cat ${CADB}/${LOCALCA}.crt ${CADB}/${ROOTCA}.crt) $FILE.crt
+openssl verify -CAfile <(cat ${CADB}/${HOMECA}.crt ${CADB}/${ROOTCA}.crt) $FILE.crt
